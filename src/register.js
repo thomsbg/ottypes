@@ -16,4 +16,4 @@ function compose(a, b) {
   return b
 }
 
-export { name, create, apply, transform, compose }
+module.exports = { name, create, apply, transform, compose }

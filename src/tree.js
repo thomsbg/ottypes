@@ -160,7 +160,6 @@ class Delta {
   composeWith(other) {
     for (let [a, b] of opPairs(this.ops, other.ops)) {
       switch (a[0] + b[0]) {
-      case ''
       }
     }
   }
