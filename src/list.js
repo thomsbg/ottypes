@@ -28,213 +28,212 @@ function normalize(delta) {
 function apply(list, delta) {
   let newList = []
   let offset = 0
-  delta = normalize(delta)
-  for (let i = 0; i < delta.length; i++) {
-    let op = delta[i]
-    let [type, ...args] = op
+
+  for (let [type, ...args] of delta) {
     switch (type) {
       case 'retain':
         let count = args[0]
-        newList = newList.concat(list.slice(offset, offset + count));
-        offset += count;
+        newList = newList.concat(list.slice(offset, offset + count))
+        offset += count
         break
+
       case 'insert':
-        newList.push(...args);
+        newList.push(...args)
         break
+
       case 'delete':
-        offset += args[0];
+        offset += args[0]
         break
+
       case 'apply':
-        let subtype = SUBTYPES.get(args[0]);
-        if (!subtype) throw new Error('unknown subtype: ' + args[0]);
-        newList.push(subtype.apply(list[offset], args[1]));
-        offset += 1;
+        let subtype = SUBTYPES.get(args[0])
+        if (subtype == null) {
+          throw new Error(`unknown subtype: ${args[0]}`)
+        }
+        newList.push(subtype.apply(list[offset], args[1]))
+        offset += 1
         break
+
       default:
-        throw new Error('unknown op type', type)
+        throw new Error(`unknown op type: ${type}`)
     }
   }
 
   // implicit trailing retain
-  return newList.concat(list.slice(offset));
-};
+  return newList.concat(list.slice(offset))
+}
 
-// retain, delete, insert, apply
 function compose(a, b) {
   let result = []
-  // console.log('composing', a, b)
   let iterA = deltaIterator(a)
   let iterB = deltaIterator(b)
+
   while (iterA.hasNext() || iterB.hasNext()) {
     let lengthA = iterA.peekLength()
     let lengthB = iterB.peekLength()
-    // console.log('composing loop', iterA.peekType(), lengthA, iterB.peekType(), lengthB)
     let lengthMin = Math.min(lengthA, lengthB)
-    let opA, opB, subtype
+
     switch (iterA.peekType() + iterB.peekType()) {
-      case 'retainretain':
-      case 'applyretain':
-      case 'deletedelete':
       case 'deleteretain':
+      case 'deleteinsert':
+      case 'deletedelete':
       case 'deleteapply':
+        // A's deletes happens first, don't consume anything from B
+        pushOp(result, iterA.next(lengthA))
+        break
+
+      case 'insertinsert':
+      case 'retaininsert':
+      case 'applyinsert':
+        // B's inserts happen second, don't consume anything from A
+        pushOp(result, iterB.next(lengthB))
+        break
+
+      case 'insertdelete':
+        // B deleting what A inserted is a no-op
+        iterA.next(lengthMin)
+        iterB.next(lengthMin)
+        break
+
+      case 'retainretain':
       case 'insertretain':
-        // use A, skip over B
+      case 'applyretain':
+        // A's operation gets applied while B's retain gets consumed
         pushOp(result, iterA.next(lengthMin))
         iterB.next(lengthMin)
         break
-      case 'retaindelete':
+
       case 'retainapply':
-      case 'applydelete':
-        // use B, skip over A
+      case 'retaindelete':
+        // B's operation gets applied while A's retain gets consumed
         pushOp(result, iterB.next(lengthMin))
         iterA.next(lengthMin)
         break
-      case 'deleteinsert':
-        // use A, dont use B yet
-        pushOp(result, iterA.next(lengthA))
-        break
-      case 'retaininsert':
-      case 'applyinsert':
-      case 'insertinsert':
-        // use B, dont use A yet
-        pushOp(result, iterB.next(lengthB))
-        break
-      case 'insertdelete':
-        // skip over both
+
+      case 'applydelete':
+        // B's delete clobbers A's apply
+        pushOp(result, iterB.next(lengthMin))
         iterA.next(lengthMin)
-        iterB.next(lengthMin)
         break
+
       case 'insertapply':
-        opA = iterA.next(1)
-        opB = iterB.next(1)
-        subtype = SUBTYPES.get(opB[1])
-        let applied = subtype.apply(opA[1], opB[2])
-        pushOp(result, ['insert', applied])
-        break
-      case 'applyapply':
-        opA = iterA.next(lengthA)
-        opB = iterB.next(lengthB)
-        // compose with subtype
-        if (opA[1] != opB[1]) {
-          throw new Error('cannot compose apply operations of different subtypes', opA[1], opB[1])
+        // B's apply modifies the first value inserted by A
+        var [, firstA, ...restA] = iterA.next(lengthMin)
+        var [, typeB, argB] = iterB.next(lengthMin)
+        var subtype = SUBTYPES.get(typeB)
+        if (subtype == null) {
+          throw new Error(`unkown subtype: ${typeB}`)
         }
-        subtype = SUBTYPES.get(opA[1])
-        let composed = subtype.compose(opA[2], opB[2])
-        pushOp(result, ['apply', opA[1], composed])
+        var applied = subtype.apply(firstA, argB)
+        pushOp(result, ['insert', applied, ...restA])
         break
+
+      case 'applyapply':
+        // A's and B's ops get composed if they match
+        var [, typeA, argA] = iterA.next(lengthA)
+        var [, typeB, argB] = iterB.next(lengthB)
+        if (typeA != typeB) {
+          throw new Error(`cannot compose apply ops with different subtypes: ${typeA}, ${typeB}`)
+        }
+        var subtype = SUBTYPES.get(typeA)
+        if (subtype == null) {
+          throw new Error(`unknown subtype: ${typeA}`)
+        }
+        pushOp(result, ['apply', typeA, subtype.compose(argA, argB)])
+        break
+
+      default:
+        throw new Error(`unknown op types: ${iterA.peekType()}${iterB.peekType()}`)
     }
   }
+
   return chop(result)
 }
 
-function transform(a, b, side) {
-  let newA = []
-  let iterA = deltaIterator(a)
-  let iterB = deltaIterator(b)
-  while (iterA.hasNext() || iterB.hasNext()) {
-    let lengthA = iterA.peekLength()
-    let lengthB = iterB.peekLength()
-    let lengthMin = Math.min(lengthA, lengthB)
+function transform(ourOps, theirOps, side) {
+  let result = []
+  let ours = deltaIterator(ourOps)
+  let theirs = deltaIterator(theirOps)
+
+  while (ours.hasNext() || theirs.hasNext()) {
+    let lengthOurs = ours.peekLength()
+    let lengthTheirs = theirs.peekLength()
+    let lengthMin = Math.min(lengthOurs, lengthTheirs)
     let count
-    switch (iterA.peekType() + iterB.peekType()) {
+
+    switch (ours.peekType() + theirs.peekType()) {
       case 'retainretain':
-        pushOp(newA, ['retain', lengthMin])
-        iterA.next(lengthMin)
-        iterB.next(lengthMin)
+      case 'deleteretain':
+      case 'applyretain':
+      case 'retainapply':
+      case 'deleteapply':
+        // our op consumes some of their retain
+        // their apply may act as a 'retain 1'
+        pushOp(result, ours.next(lengthMin))
+        theirs.next(lengthMin)
         break
 
       case 'deletedelete':
-        pushOp(newA, ['delete', lengthA - lengthB])
-        iterA.next(lengthA)
-        iterB.next(lengthB)
-        break
-
-      case 'insertinsert':
-        if (side === 'left') {
-          pushOp(newA, iterA.next(lengthA))
-        } else {
-          pushOp(newA, ['retain', lengthB])
-          pushOp(newA, iterA.next(lengthA))
-        }
-        iterB.next(lengthB)
-        break
-
-      case 'applyapply':
-        let opA = iterA.next()
-        let opB = iterB.next()
-        if (opA[1] != opB[1]) {
-          throw new Error('cannot transform apply ops for different subtypes:', opA[1], opB[1])
-        }
-        let subtype = SUBTYPES.get(opA[1])
-        let transformed = subtype.transform(opA[2], opB[2], side)
-        pushOp(newA, ['apply', opA[1], transformed])
-        break
-
+      case 'applydelete':
       case 'retaindelete':
-        iterA.next(lengthMin)
-        iterB.next(lengthMin)
-        break
-      case 'deleteretain':
-        pushOp(newA, ['delete', lengthMin])
-        iterA.next(lengthMin)
-        iterB.next(lengthMin)
+        // their delete made some (or all) of our op unnecessary
+        ours.next(lengthMin)
+        theirs.next(lengthMin)
         break
 
       case 'retaininsert':
-        pushOp(newA, ['retain', lengthB])
-        iterB.next(lengthB)
-        break
-      case 'insertretain':
-        pushOp(newA, iterA.next(lengthA))
-        break
-
-      case 'retainapply':
-        iterB.next(lengthMin)
-        break
-      case 'applyretain':
-        pushOp(newA, iterA.next(lengthMin))
-        iterB.next(lengthMin)
-        break
-
-      case 'deleteinsert':
-        pushOp(newA, ['retain', lengthB])
-        pushOp(newA, ['delete', lengthA])
-        iterA.next(lengthA)
-        iterB.next(lengthB)
-        break
-      case 'insertdelete':
-        iterB.next(lengthB)
-        break
-
-      case 'deleteapply':
-        pushOp(newA, iterA.next(lengthMin)) // delete trumps apply
-        iterB.next(lengthMin)
-        break
-      case 'applydelete':
-        // no-op since delete trumps apply
-        iterA.next(lengthMin)
-        iterB.next(lengthMin)
-        break
-
-      case 'insertapply':
-        pushOp(newA, iterA.next(lengthA))
-        break
       case 'applyinsert':
-        pushOp(newA, ['retain', lengthB])
-        iterB.next(lengthB)
+      case 'deleteinsert':
+        // shift for their insert
+        pushOp(result, ['retain', lengthTheirs])
+        theirs.next(lengthTheirs)
         break
+
+      case 'insertretain':
+      case 'insertapply':
+      case 'insertdelete':
+        // our insert happens before their op
+        pushOp(result, ours.next(lengthMin))
+        break
+
+      case 'insertinsert':
+        // use the tiebreaker to see who goes first
+        if (side == 'left') {
+          pushOp(result, ours.next(lengthOurs))
+        } else {
+          pushOp(result, ['retain', lengthTheirs])
+          pushOp(result, ours.next(lengthOurs))
+          theirs.next(lengthTheirs)
+        }
+        break
+
+      case 'applyapply':
+        // recurse to call the transform function if the subtypes match
+        let [, ourSubtype, ourArg] = ours.next()
+        let [, theirSubtype, theirArg] = theirs.next()
+        if (ourSubtype !== theirSubtype) {
+          throw new Error(`cannot transform apply ops with different subtypes: ${ourSubtype}, ${theirSubtype}`)
+        }
+        let subtype = SUBTYPES.get(ourSubtype)
+        let transformed = subtype.transform(ourArg, theirArg, side)
+        pushOp(result, ['apply', ourSubtype, transformed])
+        break
+
+      default:
+        throw new Error(`unknown op types: ${ours.peekType()}${theirs.peekType()}`)
     }
   }
-  return chop(newA)
-}
 
-function has(obj, ...props) {
-  return props.every(x => x in obj)
+  return chop(result)
 }
 
 function pushOp(delta, op) {
   if ((op[0] == 'retain' || op[0] == 'delete') && op[1] <= 0) {
     // retain or delete < is a no-op
+    return delta
+  }
+  if (op[0] == 'insert' && op.length < 2) {
+    // insert with no args is a no-op
     return delta
   }
   if (delta.length == 0) {
@@ -254,10 +253,14 @@ function pushOp(delta, op) {
       last.splice(last.length, 0, ...op.slice(1))
       break
     case 'insertdelete':
-    // case 'applyinsert':
-    // case 'applydelete':
-      // ensure order of ops at same location follows: delete, insert, apply
-      delta.splice(delta.length - 1, 0, op)
+      // ensure delete comes before insert
+      // if 2nd to last is a delete, make sure to merge it as above
+      var nextToLast = (delta.length > 1) && delta[delta.length - 2]
+      if (nextToLast && nextToLast[0] == 'delete') {
+        nextToLast[1] += op[1]
+      } else {
+        delta.splice(delta.length - 1, 0, op)
+      }
       break
     default:
       // otherwise push onto the end
@@ -329,7 +332,6 @@ function* opPairs(a, b) {
 function deltaIterator(delta) {
   var index = 0
   var offset = 0
-  delta = normalize(delta)
   return {
     peekType() {
       if (index < delta.length) {
