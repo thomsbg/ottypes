@@ -1,2 +1,2 @@
 # ottypes
-vector, map, set ottypes
+composable register, list, map, set, tree ottypes
