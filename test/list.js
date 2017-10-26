@@ -1,6 +1,6 @@
-const test = require('tape')
-const fuzzer = require('ot-fuzzer')
-const type = require('../src/list')
+import test from 'tape'
+import fuzzer from '@thomsbg/ot-fuzzer'
+import { list as type } from '../src'
 
 test('list.create', t => {
   let list = type.create()

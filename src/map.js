@@ -1,8 +1,5 @@
-// register types
-require('./index');
-
-var _ = require('./util');
-var ottypes = require('ottypes');
+import _ from './util'
+import ottypes from 'ottypes'
 
 function Type(mapping, defaultType) {
   this.mapping = {};

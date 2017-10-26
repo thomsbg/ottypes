@@ -1,19 +1,17 @@
-const name = 'register'
+export const name = 'register'
 
-function create(val) {
+export function create(val) {
   return val
 }
 
-function apply(prev, val) {
+export function apply(prev, val) {
   return val
 }
 
-function transform(a, b, side) {
+export function transform(a, b, side) {
   return side === 'left' ? a : b
 }
 
-function compose(a, b) {
+export function compose(a, b) {
   return b
 }
-
-module.exports = { name, create, apply, transform, compose }

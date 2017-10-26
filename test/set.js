@@ -1,5 +1,5 @@
 const test = require('tape')
-const fuzzer = require('ot-fuzzer')
+const fuzzer = require('@thomsbg/ot-fuzzer')
 const type = require('../src/set')
 
 test('set.create', t => {
@@ -11,7 +11,52 @@ test('set.create', t => {
   t.end()
 })
 
-test(`set.apply`, t => {
+test('set.normalize', t => {
+  [
+    {
+      delta: { add: [1], del: [2] },
+      result: { add: [1], del: [2] }
+    },
+    {
+      delta: { add: [2,3,1], del: [5,4] },
+      result: { add: [1,2,3], del: [4,5] }
+    },
+    {
+      delta: { add: [3,2,1], del: [3] },
+      result: { add: [1,2], del: [3] }
+    }
+  ].forEach(({ delta, result }) => {
+    t.deepEqual(type.normalize(delta), result)
+  })
+  t.end()
+})
+
+test('set.serialize', t => {
+  [
+    {
+      input: new Set([3,2,1]),
+      result: [1,2,3]
+    }
+  ].forEach(({ input, result }) => {
+    t.deepEqual(type.serialize(input), result)
+  })
+  t.end()
+})
+
+test('set.deserialize', t => {
+  [
+    {
+      input: [1,2,2,3,3,1],
+      result: new Set([1,2,3])
+    }
+  ].forEach(({ input, result }) => {
+    t.ok(result instanceof Set)
+    for (let x of input) { t.ok(result.has(x)) }
+  })
+  t.end()
+})
+
+test('set.apply', t => {
   [
     { snapshot: [],  delta: { add: [1], del: [] },  result: [1] },
     { snapshot: [1], delta: { add: [],  del: [1] }, result: [] },
@@ -44,9 +89,14 @@ test('set.compose', t => {
       a: { add: [1], del: [] },
       b: { add: [1,2], del: [3] },
       result: { add: [1,2], del: [3] }
+    },
+    {
+      a: { add: [1,2], del: [3] },
+      b: { add: [3,4], del: [1] },
+      result: { add: [2,3,4], del: [1] }
     }
   ].forEach(({ a, b, result }) => {
-    t.deepEqual(type.compose(a, b), result)
+    t.deepEqual(type.normalize(type.compose(a, b)), type.normalize(result))
   })
   t.end()
 })
@@ -83,6 +133,12 @@ test('set.transform', t => {
       b: { add: [1,2], del: [] },
       result: [3,4]
     },
+    {
+      base: [3,4],
+      a: { add: [3,5], del: [4] },
+      b: { add: [4], del: [5] },
+      result: [3,4,5]
+    }
   ].forEach(({ base, a, b, result }) => {
     let aThenB = type.apply(type.apply(type.create(base), a), type.transform(b, a, 'left'))
     let bThenA = type.apply(type.apply(type.create(base), b), type.transform(a, b, 'right'))

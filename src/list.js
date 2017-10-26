@@ -1,18 +1,13 @@
-const SUBTYPES = new Map()
+import { get as getSubtype } from './subtypes'
 
-const name = 'list'
-const uri = 'https://github.com/thomsbg/ottypes/list'
+export const name = 'list'
+export const uri = 'https://github.com/thomsbg/ottypes/list'
 
-function registerSubtype(type) {
-  if (type.name) SUBTYPES.set(type.name, type)
-  if (type.uri) SUBTYPES.set(type.uri, type)
-}
-
-function create(initial) {
+export function create(initial) {
   return initial ? [...initial] : []
 }
 
-function normalize(delta) {
+export function normalize(delta) {
   let result = []
 
   // rebuild by pushing every op, ensuring that consecutive ops of the same type
@@ -25,7 +20,7 @@ function normalize(delta) {
   return chop(result)
 }
 
-function apply(list, delta) {
+export function apply(list, delta) {
   let newList = []
   let offset = 0
 
@@ -46,10 +41,7 @@ function apply(list, delta) {
         break
 
       case 'apply':
-        let subtype = SUBTYPES.get(args[0])
-        if (subtype == null) {
-          throw new Error(`unknown subtype: ${args[0]}`)
-        }
+        let subtype = getSubtype(args[0])
         newList.push(subtype.apply(list[offset], args[1]))
         offset += 1
         break
@@ -63,7 +55,7 @@ function apply(list, delta) {
   return newList.concat(list.slice(offset))
 }
 
-function compose(a, b) {
+export function compose(a, b) {
   let result = []
   let iterA = deltaIterator(a)
   let iterB = deltaIterator(b)
@@ -120,11 +112,7 @@ function compose(a, b) {
         // B's apply modifies the first value inserted by A
         var [, firstA, ...restA] = iterA.next(lengthMin)
         var [, typeB, argB] = iterB.next(lengthMin)
-        var subtype = SUBTYPES.get(typeB)
-        if (subtype == null) {
-          throw new Error(`unkown subtype: ${typeB}`)
-        }
-        var applied = subtype.apply(firstA, argB)
+        var applied = getSubtype(typeB).apply(firstA, argB)
         pushOp(result, ['insert', applied, ...restA])
         break
 
@@ -135,11 +123,8 @@ function compose(a, b) {
         if (typeA != typeB) {
           throw new Error(`cannot compose apply ops with different subtypes: ${typeA}, ${typeB}`)
         }
-        var subtype = SUBTYPES.get(typeA)
-        if (subtype == null) {
-          throw new Error(`unknown subtype: ${typeA}`)
-        }
-        pushOp(result, ['apply', typeA, subtype.compose(argA, argB)])
+        var composed = getSubtype(typeA).compose(argA, argB)
+        pushOp(result, ['apply', typeA, composed])
         break
 
       default:
@@ -150,7 +135,7 @@ function compose(a, b) {
   return chop(result)
 }
 
-function transform(ourOps, theirOps, side) {
+export function transform(ourOps, theirOps, side) {
   let result = []
   let ours = deltaIterator(ourOps)
   let theirs = deltaIterator(theirOps)
@@ -214,8 +199,7 @@ function transform(ourOps, theirOps, side) {
         if (ourSubtype !== theirSubtype) {
           throw new Error(`cannot transform apply ops with different subtypes: ${ourSubtype}, ${theirSubtype}`)
         }
-        let subtype = SUBTYPES.get(ourSubtype)
-        let transformed = subtype.transform(ourArg, theirArg, side)
+        let transformed = getSubtype(ourSubtype).transform(ourArg, theirArg, side)
         pushOp(result, ['apply', ourSubtype, transformed])
         break
 
@@ -368,11 +352,3 @@ function deltaIterator(delta) {
     }
   }
 }
-
-module.exports = { name, uri, create, normalize, apply, compose, transform, registerSubtype }
-
-registerSubtype(module.exports)
-registerSubtype(require('./register'))
-registerSubtype(require('./set'))
-// registerSubtype(require('./map'))
-// registerSubtype(require('./tree'))

@@ -5,23 +5,22 @@
   "description": "Basic, composable ottypes conforming to the sharejs spec",
   "homepage": "https://github.com/thomsbg/ottypes",
   "license": "MIT",
-  "main": "index.js",
+  "main": "lib/index.js",
+  "module": "src/index.js",
   "dependencies": {
-    "ot-fuzzer": "thomsbg/fuzzer"
+    "babel-polyfill": "^6.26.0"
   },
   "devDependencies": {
-    "babel-cli": "^6.24.1",
-    "babel-polyfill": "^6.23.0",
-    "babel-preset-env": "^1.5.2",
-    "babel-register": "^6.24.1",
-    "npm-run-all": "^4.0.2",
+    "@thomsbg/ot-fuzzer": "^2.0.3",
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.6.1",
+    "babel-register": "^6.26.0",
     "tape": "^4.6.3"
   },
   "scripts": {
-    "test": "tape",
-    "build": "babel -d lib src",
-    "watch:babel": "babel -w -d lib src",
-    "watch": "run-p watch:*"
+    "test": "tape -r babel-register -r babel-polyfill test/*.js",
+    "prepare": "babel -d lib src",
+    "watch": "babel -w -d lib src"
   },
   "repository": {
     "type": "git",
@@ -34,5 +33,19 @@
     "ottypes",
     "operational",
     "transformation"
-  ]
+  ],
+  "babel": {
+    "presets": [
+      [
+        "env",
+        {
+          "targets": {
+            "node": "6.0.0",
+            "browsers": "last 2 versions"
+          },
+          "useBuiltIns": true
+        }
+      ]
+    ]
+  }
 }

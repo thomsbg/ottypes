@@ -1,9 +1,17 @@
-require('babel-polyfill')
+import 'babel-polyfill'
 
-const register = require('./register')
-const set = require('./set')
-const map = require('./map')
-const list = require('./list')
-const tree = require('./tree')
+import * as register from './register'
+import * as set from './set'
+// import * as map from './map'
+import * as list from './list'
+// import * as tree from './tree'
+import * as subtypes from './subtypes'
 
-module.exports = { register, set, map, list, tree }
+subtypes.set(register)
+subtypes.set(set)
+// subtypes.set(map)
+subtypes.set(list)
+// subtypes.set(tree)
+
+export { register, set, list, subtypes }
+// export { map, tree }
