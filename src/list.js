@@ -144,7 +144,6 @@ export function transform(ourOps, theirOps, side) {
     let lengthOurs = ours.peekLength()
     let lengthTheirs = theirs.peekLength()
     let lengthMin = Math.min(lengthOurs, lengthTheirs)
-    let count
 
     switch (ours.peekType() + theirs.peekType()) {
       case 'retainretain':
@@ -282,34 +281,6 @@ function opSlice(op, offset, length) {
     case 'apply':
       // apply is indivisible
       return op
-  }
-}
-
-function* opPairs(a, b) {
-  let indexA = 0
-  let offsetA = 0
-  let indexB = 0
-  let offsetB = 0
-  while (indexA < a.length || indexB < b.length) {
-    let opA = a[indexA] || ['retain', Infinity]
-    let opB = b[indexB] || ['retain', Infinity]
-    let lenA = opLength(opA)
-    let lenB = opLength(opB)
-    let size = Math.min(opLength(opA) - offsetA, opLength(opB) - offsetB)
-    let sliceA = opSlice(opA, offsetA, size)
-    let sliceB = opSlice(opB, offsetB, size)
-    // if (sliceA == undefined) console.log('opA=',opA, 'a=', a)
-    yield [sliceA, sliceB, size]
-    offsetA += opLength(sliceA)
-    if (offsetA >= lenA) {
-      indexA += 1
-      offsetA = 0
-    }
-    offsetB += opLength(sliceB)
-    if (offsetB >= lenB) {
-      indexB += 1
-      offsetB = 0
-    }
   }
 }
 

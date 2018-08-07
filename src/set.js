@@ -10,8 +10,8 @@ export function serialize(set) {
   return [...set].sort()
 }
 
-export function deserialize(ary) {
-  return new Set(ary)
+export function deserialize(array) {
+  return new Set(array)
 }
 
 export function normalize(delta) {
@@ -39,7 +39,7 @@ export function transform(a, b, side) {
   let del = difference(a.del, b.del)
 
   // use tiebreaker to determine which side to prefer in case of concurrent add + delete
-  if (side != 'left') {
+  if (side === 'right') {
     add = difference(a.add, b.del)
     del = difference(a.del, b.add)
   }

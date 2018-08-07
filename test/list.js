@@ -352,9 +352,6 @@ test('list.fuzzer', t => {
       }
     }
     delta = type.normalize(delta)
-    // console.log('fuzzer base', list)
-    // console.log('fuzzer delta', delta)
-    // console.log('fuzzer result', result, '\n')
     return [delta, result]
   })
   t.end()

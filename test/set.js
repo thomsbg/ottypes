@@ -1,12 +1,14 @@
-const test = require('tape')
-const fuzzer = require('@thomsbg/ot-fuzzer')
-const type = require('../src/set')
+import test from 'tape'
+import fuzzer from '@thomsbg/ot-fuzzer'
+import { set as type } from '../src'
 
 test('set.create', t => {
   let set = type.create()
   t.ok(set)
+  t.ok(set instanceof Set)
   set = type.create([1,2,3])
   t.ok(set)
+  t.ok(set instanceof Set)
   t.deepEqual([...set], [1,2,3])
   t.end()
 })

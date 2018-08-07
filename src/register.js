@@ -1,4 +1,5 @@
 export const name = 'register'
+export const uri = 'https://github.com/thomsbg/ottypes/register'
 
 export function create(val) {
   return val

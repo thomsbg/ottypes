@@ -1,73 +1,61 @@
-import _ from './util'
-import ottypes from 'ottypes'
+export const name = 'map';
+export const uri = 'https://github.com/thomsbg/ottypes/map'
 
-function Type(mapping, defaultType) {
-  this.mapping = {};
-  _.forOwn(mapping, function(key, val) {
-    var type = ottypes[val];
-    if (!type) throw new Error('unknown ottype: ' + val);
-    this.mapping[key] = type;
-  }, this);
+export function create(entries) {
+  return new Map(entries)
+}
 
-  if (defaultType && !ottypes[defaultType]) {
-    throw new Error('unknown ottype: ' + defaultType);
-  } else if (defaultType) {
-    this.defaultType = ottypes[defaultType];
+export function serialize(map) {
+  return [...map]
+}
+
+export function deserialize(entries) {
+  return new Map(entries)
+}
+
+export function normalize({ add, del }) {
+  del = new Set(del)
+  add = new Map(add)
+  for (let k of del) { add.delete(k) }
+  return { add: [...add], del: [...del] }
+}
+
+export function apply(map, { add, del }) {
+  map = new Map(map)
+  for (let [k, v] of add) { map.set(k, v) }
+  for (let k of del) { map.delete(k) }
+  return map
+}
+
+export function compose(a, b) {
+  // Start with B
+  let add = new Map(b.add)
+  let del = new Set(b.del)
+  // Add dels from A unless they conflict with adds from B
+  for (let k of a.del) {
+    if (!add.has(k) && !del.has(k)) { del.add(k) }
   }
+  // Add adds from A unless they conflict with dels from B
+  for (let [k, v] of a.add) {
+    if (!add.has(k) && !del.has(k)) { add.set(k, v) }
+  }
+  return { add: [...add], del: [...del] }
 }
 
-module.exports = new Type({}, 'scalar');
-module.exports.name = 'map';
-module.exports.define = function define(mapping, defaultType) {
-  return new Type(mapping, defaultType);
-};
-
-function create(data) {
-  // return new 
-  var snapshot = {};
-  _.forOwn(initial, function(key, val) {
-    var type = this.mapping[key] || this.defaultType;
-    if (!type) throw new Error('key not in mapping: ' + key);
-    snapshot[key] = type.create(val);
-  }, this);
-  return snapshot;
+export function transform(a, b, side) {
+  let add = new Map(a.add)
+  let del = new Set(a.del)
+  if (side != 'left') {
+    for (let [k, v] of b.add) {
+      // we both added
+      if (add.has(k)) { add.delete(k) }
+      // we deleted they added
+      del.delete(k)
+    }
+    // we added they deleted
+    for (let k of b.del) {
+      add.delete(k)
+    }
+  }
+  return { add: [...add], del: [...del] }
 }
-
-Type.prototype.apply = function(snapshot, op) {
-  _.forOwn(op, function(key, val) {
-    var type = this.mapping[key] || this.defaultType;
-    if (!type) throw new Error('key not in mapping: ' + key);
-    snapshot[key] = type.apply(snapshot[key] || type.create(), val);
-  }, this);
-  return snapshot;
-};
-
-Type.prototype.transform = function(op1, op2, side) {
-  var newOp = {};
-  _.forOwn(op2, function(key, val) {
-    var type = this.mapping[key] || this.defaultType;
-    if (!type) throw new Error('key not in mapping: ' + key);
-    if (op1.hasOwnProperty(key)) {
-      newOp[key] = type.transform(op1[key], op2[key], side);
-    } else {
-      newOp[key] = op2[key];
-    }
-  }, this);
-  _.defaults(newOp, op1);
-  return newOp;
-};
-
-Type.prototype.compose = function(op1, op2) {
-  var newOp = {};
-  _.forOwn(op2, function(key, val) {
-    var type = this.mapping[key] || this.defaultType;
-    if (!type) throw new Error('key not in mapping: ', key);
-    if (op1[key]) {
-      newOp[key] = type.compose(op1[key], op2[key]);
-    } else {
-      newOp[key] = op2[key];
-    }
-  }, this);
-  _.defaults(newOp, op1);
-  return newOp;
-};
