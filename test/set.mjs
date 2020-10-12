@@ -1,6 +1,6 @@
 import test from 'tape'
-import fuzzer from '@thomsbg/ot-fuzzer'
-import { set as type } from '../src'
+import fuzzer, { randomInt, randomReal, randomWord } from '@thomsbg/ot-fuzzer'
+import { set as type } from '@thomsbg/ottypes'
 
 test('set.create', t => {
   let set = type.create()
@@ -156,18 +156,18 @@ test('set.fuzzer', t => {
     let del = new Set()
     set = [...set]
     let newSet = new Set(set)
-    for (let i = 0, count = fuzzer.randomInt(4); i < count; i++) {
-      if (set.length > add.size && fuzzer.randomReal() < 0.5) {
+    for (let i = 0, count = randomInt(4); i < count; i++) {
+      if (set.length > add.size && randomReal() < 0.5) {
         let el
         do {
-          el = set[fuzzer.randomInt(set.length)]
+          el = set[randomInt(set.length)]
         } while (add.has(el))
         del.add(el)
         newSet.delete(el)
       } else {
         let el
         do {
-          el = fuzzer.randomWord()
+          el = randomWord()
         } while (del.has(el))
         add.add(el)
         newSet.add(el)

@@ -1,6 +1,6 @@
 import test from 'tape'
-import fuzzer from '@thomsbg/ot-fuzzer'
-import { register as type } from '../src'
+import fuzzer, { randomInt } from '@thomsbg/ot-fuzzer'
+import { register as type } from '@thomsbg/ottypes'
 
 test('register.create', t => {
   let val = type.create('abc123')
@@ -51,7 +51,7 @@ test('register.transform', t => {
 
 test('register.fuzzer', t => {
   fuzzer(type, (oldValue) => {
-    let newValue = fuzzer.randomInt(100)
+    let newValue = randomInt(100)
     return [newValue, newValue]
   })
   t.end()

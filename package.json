@@ -1,23 +1,25 @@
 {
-  "name": "ottypes",
+  "name": "@thomsbg/ottypes",
   "version": "0.0.1",
   "author": "Blake Thomson <thomsbg@gmail.com>",
-  "description": "Basic, composable ottypes conforming to the sharejs spec",
+  "description": "Composable operational transformation (OT) algorithms for several abstract data types, conforming to the https://github.com/ottypes/docs spec.",
   "homepage": "https://github.com/thomsbg/ottypes",
   "license": "MIT",
-  "main": "lib/index.js",
-  "module": "src/index.js",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./list": "./src/list.mjs",
+    "./map": "./src/map.mjs",
+    "./register": "./src/register.mjs",
+    "./set": "./src/set.mjs",
+    "./string": "./src/string.mjs",
+    "./tree": "./src/tree.mjs"
+  },
   "devDependencies": {
-    "@thomsbg/ot-fuzzer": "^2.0.3",
-    "babel-cli": "^6.26.0",
-    "babel-preset-env": "^1.7.0",
-    "babel-register": "^6.26.0",
+    "@thomsbg/ot-fuzzer": "^3.0.0",
     "tape": "^4.6.3"
   },
   "scripts": {
-    "test": "tape -r babel-register",
-    "prepare": "babel -d lib src",
-    "watch": "babel -w -d lib src"
+    "test": "node test/index.mjs"
   },
   "repository": {
     "type": "git",
@@ -30,19 +32,5 @@
     "ottypes",
     "operational",
     "transformation"
-  ],
-  "babel": {
-    "presets": [
-      [
-        "env",
-        {
-          "targets": {
-            "node": "6.0.0",
-            "browsers": "last 2 versions"
-          },
-          "useBuiltIns": true
-        }
-      ]
-    ]
-  }
+  ]
 }

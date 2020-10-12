@@ -1,6 +1,6 @@
 import test from 'tape'
-import fuzzer from '@thomsbg/ot-fuzzer'
-import { map as type } from '../src'
+import fuzzer, { randomInt, randomReal, randomWord } from '@thomsbg/ot-fuzzer'
+import { map as type } from '@thomsbg/ottypes'
 
 test('map.fuzzer', t => {
   // override serialize for deep equality check
@@ -14,20 +14,20 @@ test('map.fuzzer', t => {
     let newMap = new Map(map)
     let add = new Map()
     let del = new Set()
-    for (let i = 0, count = fuzzer.randomInt(10); i < count; i++) {
-      if (fuzzer.randomReal() < 0.5) {
-        let k = fuzzer.randomInt(100)
+    for (let i = 0, count = randomInt(10); i < count; i++) {
+      if (randomReal() < 0.5) {
+        let k = randomInt(100)
         while (add.has(k)) {
-          k = fuzzer.randomInt(100)
+          k = randomInt(100)
         }
         del.add(k)
         newMap.delete(k)
       } else {
-        let k = fuzzer.randomInt(100)
+        let k = randomInt(100)
         while (del.has(k)) {
-          k = fuzzer.randomInt(100)
+          k = randomInt(100)
         }
-        let v = fuzzer.randomWord()
+        let v = randomWord()
         add.set(k, v)
         newMap.set(k, v)
       }

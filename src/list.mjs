@@ -1,4 +1,4 @@
-import { get as getSubtype } from './subtypes'
+import { get as getSubtype } from './subtypes.mjs'
 
 export const name = 'list'
 export const uri = 'https://github.com/thomsbg/ottypes/list'

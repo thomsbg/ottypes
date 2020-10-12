@@ -1,6 +1,6 @@
 import test from 'tape'
-import fuzzer from '@thomsbg/ot-fuzzer'
-import { list as type } from '../src'
+import fuzzer, { randomInt } from '@thomsbg/ot-fuzzer'
+import { list as type } from '@thomsbg/ottypes'
 
 test('list.create', t => {
   let list = type.create()
@@ -304,10 +304,10 @@ test('list.fuzzer', t => {
     let result = list.slice()
     let offset = 0
     if (list.length == 0) {
-      let count = fuzzer.randomInt(3) + 1
+      let count = randomInt(3) + 1
       let inserts = []
       for (let i = 0; i < count; i++) {
-        inserts.push(fuzzer.randomInt(10))
+        inserts.push(randomInt(10))
       }
       delta.push(['insert', ...inserts])
       offset += count
@@ -316,26 +316,26 @@ test('list.fuzzer', t => {
     }
     for (let i = 0; i < 3; i++) {
       let count
-      switch (fuzzer.randomInt(4)) {
+      switch (randomInt(4)) {
         case 0:
-          count = Math.floor(fuzzer.randomInt(result.length - offset) / 2)
+          count = Math.floor(randomInt(result.length - offset) / 2)
           if (count > 0) {
             delta.push(['retain', count])
             offset += count
           }
           break
         case 1:
-          count = Math.floor(fuzzer.randomInt(result.length - offset) / 2)
+          count = Math.floor(randomInt(result.length - offset) / 2)
           if (count > 0) {
             delta.push(['delete', count])
             result.splice(offset, count)
           }
           break
         case 2:
-          count = fuzzer.randomInt(2) + 1
+          count = randomInt(2) + 1
           let inserts = []
           for (let j = 0; j < count; j++) {
-            inserts.push(fuzzer.randomInt(10))
+            inserts.push(randomInt(10))
           }
           delta.push(['insert', ...inserts])
           result.splice(offset, 0, ...inserts)
@@ -343,7 +343,7 @@ test('list.fuzzer', t => {
           break
         case 3:
           if (offset < result.length - 1) {
-            let value = fuzzer.randomInt(10)
+            let value = randomInt(10)
             delta.push(['apply', 'register', value])
             result[offset] = value
             offset += 1

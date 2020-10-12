@@ -1,6 +1,6 @@
 import test from 'tape'
-import fuzzer from '@thomsbg/ot-fuzzer'
-import { string as type } from '../src'
+import fuzzer, { randomInt, randomWord } from '@thomsbg/ot-fuzzer'
+import { string as type } from '@thomsbg/ottypes'
 
 test('string.create', t => {
   let string = type.create()
@@ -206,29 +206,29 @@ test('string.fuzzer', t => {
     let result = string.slice()
     let offset = 0
     if (string.length == 0) {
-      string = fuzzer.randomWord()
+      string = randomWord()
     }
     for (let i = 0; i < 3; i++) {
       let count
-      switch (fuzzer.randomInt(3)) {
+      switch (randomInt(3)) {
         case 0:
-          count = Math.floor(fuzzer.randomInt(result.length - offset) / 2)
+          count = Math.floor(randomInt(result.length - offset) / 2)
           if (count > 0) {
             delta.push(count)
             offset += count
           }
           break
         case 1:
-          count = Math.floor(fuzzer.randomInt(result.length - offset) / 2)
+          count = Math.floor(randomInt(result.length - offset) / 2)
           if (count > 0) {
             delta.push(-1 * count)
             result = result.slice(0, offset) + result.slice(offset + count)
           }
           break
         case 2:
-          let insert = fuzzer.randomWord()
+          let insert = randomWord()
           while (insert === '') {
-            insert = fuzzer.randomWord()
+            insert = randomWord()
           }
           delta.push(insert)
           result = result.slice(0, offset) + insert + result.slice(offset)
