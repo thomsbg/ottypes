@@ -8,123 +8,158 @@ export function create(initial) {
 }
 
 export function normalize(delta) {
-  let result = []
+  const result = []
 
-  // rebuild by pushing every op, ensuring that consecutive ops of the same type
-  // are merged, and that delete comes before insert, insert before apply
-  for (let op of delta) {
+  // rebuild by pushing every op
+  for (const op of delta) {
     pushOp(result, op)
   }
 
-  // strip trailing retain
+  // strip trailing keep
   return chop(result)
 }
 
 export function apply(list, delta) {
-  let newList = []
+  const result = []
+  const buffer = Object.create(null)
   let offset = 0
 
-  for (let [type, ...args] of delta) {
+  for (const [type, arg] of delta) {
     switch (type) {
-      case 'retain':
-        let count = args[0]
-        newList = newList.concat(list.slice(offset, offset + count))
-        offset += count
-        break
-
-      case 'insert':
-        newList.push(...args)
-        break
-
-      case 'delete':
-        offset += args[0]
+      case 'keep':
+      case 'remove':
+        offset += arg
         break
 
       case 'apply':
-        let subtype = getSubtype(args[0])
-        newList.push(subtype.apply(list[offset], args[1]))
         offset += 1
         break
 
-      default:
-        throw new Error(`unknown op type: ${type}`)
+      case 'cut':
+        if (arg in buffer) throw new Error('cannot cut with the same argument more than once')
+        buffer[arg] = list[offset]
+        offset += 1
+        break
     }
   }
 
-  // implicit trailing retain
-  return newList.concat(list.slice(offset))
+  for (const [type, arg] of delta) {
+    switch (type) {
+      case 'keep':
+        if (offset + arg > list.length) throw new RangeError('cannot keep beyond the end of the list')
+        result.push(...list.slice(offset, offset + arg))
+        offset += arg
+        break
+
+      case 'insert':
+        result.push(arg)
+        break
+
+      case 'remove':
+        if (offset + arg > list.length) throw new RangeError('cannot remove beyond the end of the list')
+        offset += arg
+        break
+
+      case 'apply':
+        if (offset >= list.length) throw new RangeError('cannot apply beyond the end of the list')
+        const [name, operand] = arg
+        const subtype = getSubtype(name)
+        result.push(subtype.apply(list[offset], operand))
+        offset += 1
+        break
+
+      case 'cut':
+        if (offset >= list.length) throw new RangeError('cannot cut beyond the end of the list')
+        offset += 1
+        break
+
+      case 'paste':
+        if (!(arg in buffer)) throw new Error('cannot paste without a corresponding cut')
+        result.push(buffer[arg]);
+        break
+
+      default:
+        throw new Error(`unknown op: ${type}`)
+    }
+  }
+
+  // implicit trailing keep
+  if (offset < list.length) result.push(...list.slice(offset))
+
+  return result
 }
 
 export function compose(a, b) {
-  let result = []
-  let iterA = deltaIterator(a)
-  let iterB = deltaIterator(b)
+  const result = []
+  const iterA = deltaIterator(a)
+  const iterB = deltaIterator(b)
 
   while (iterA.hasNext() || iterB.hasNext()) {
-    let lengthA = iterA.peekLength()
-    let lengthB = iterB.peekLength()
-    let lengthMin = Math.min(lengthA, lengthB)
+    const lengthA = iterA.peekLength()
+    const lengthB = iterB.peekLength()
+    const lengthMin = Math.min(lengthA, lengthB)
 
     switch (iterA.peekType() + iterB.peekType()) {
-      case 'deleteretain':
-      case 'deleteinsert':
-      case 'deletedelete':
-      case 'deleteapply':
-        // A's deletes happens first, don't consume anything from B
+      case 'removekeep':
+      case 'removeinsert':
+      case 'removeremove':
+      case 'removeapply':
+        // A's remove happens first, don't consume anything from B
         pushOp(result, iterA.next(lengthA))
         break
 
       case 'insertinsert':
-      case 'retaininsert':
+      case 'keepinsert':
       case 'applyinsert':
         // B's inserts happen second, don't consume anything from A
         pushOp(result, iterB.next(lengthB))
         break
 
-      case 'insertdelete':
+      case 'insertremove':
         // B deleting what A inserted is a no-op
         iterA.next(lengthMin)
         iterB.next(lengthMin)
         break
 
-      case 'retainretain':
-      case 'insertretain':
-      case 'applyretain':
-        // A's operation gets applied while B's retain gets consumed
+      case 'keepkeep':
+      case 'insertkeep':
+      case 'applykeep':
+        // A's operation gets applied while B's keep gets consumed
         pushOp(result, iterA.next(lengthMin))
         iterB.next(lengthMin)
         break
 
-      case 'retainapply':
-      case 'retaindelete':
-        // B's operation gets applied while A's retain gets consumed
+      case 'keepapply':
+      case 'keepremove':
+        // B's operation gets applied while A's keep gets consumed
         pushOp(result, iterB.next(lengthMin))
         iterA.next(lengthMin)
         break
 
-      case 'applydelete':
-        // B's delete clobbers A's apply
+      case 'applyremove':
+        // B's remove clobbers A's apply
         pushOp(result, iterB.next(lengthMin))
         iterA.next(lengthMin)
         break
 
       case 'insertapply':
-        // B's apply modifies the first value inserted by A
-        var [, firstA, ...restA] = iterA.next(lengthMin)
-        var [, typeB, argB] = iterB.next(lengthMin)
-        var applied = getSubtype(typeB).apply(firstA, argB)
-        pushOp(result, ['insert', applied, ...restA])
+        // B's apply modifies the value inserted by A
+        const [, argA] = iterA.next(lengthMin)
+        const [, subtypeB, argB] = iterB.next(lengthMin)
+        const applied = getSubtype(subtypeB).apply(argA, argB)
+        pushOp(result, ['insert', applied])
         break
 
       case 'applyapply':
         // A's and B's ops get composed if they match
-        var [, typeA, argA] = iterA.next(lengthA)
-        var [, typeB, argB] = iterB.next(lengthB)
-        if (typeA != typeB) {
-          throw new Error(`cannot compose apply ops with different subtypes: ${typeA}, ${typeB}`)
+        const [, subtypeA, argA] = iterA.next(lengthA)
+        const [, subtypeB, argB] = iterB.next(lengthB)
+        if (subtypeA !== subtypeB) {
+          // IDEA: what if there was an ottype that could apply both subtype patches in order?
+          throw new Error(`cannot compose apply ops with different subtypes: ${subtypeA}, ${subtypeB}`)
         }
-        var composed = getSubtype(typeA).compose(argA, argB)
-        pushOp(result, ['apply', typeA, composed])
+        const composed = getSubtype(subtypeA).compose(argA, argB)
+        pushOp(result, ['apply', subtypeA, composed])
         break
 
       default:
@@ -136,46 +171,46 @@ export function compose(a, b) {
 }
 
 export function transform(ourOps, theirOps, side) {
-  let result = []
-  let ours = deltaIterator(ourOps)
-  let theirs = deltaIterator(theirOps)
+  const result = []
+  const ours = deltaIterator(ourOps)
+  const theirs = deltaIterator(theirOps)
 
   while (ours.hasNext() || theirs.hasNext()) {
-    let lengthOurs = ours.peekLength()
-    let lengthTheirs = theirs.peekLength()
-    let lengthMin = Math.min(lengthOurs, lengthTheirs)
+    const lengthOurs = ours.peekLength()
+    const lengthTheirs = theirs.peekLength()
+    const lengthMin = Math.min(lengthOurs, lengthTheirs)
 
     switch (ours.peekType() + theirs.peekType()) {
-      case 'retainretain':
-      case 'deleteretain':
-      case 'applyretain':
-      case 'retainapply':
-      case 'deleteapply':
-        // our op consumes some of their retain
-        // their apply may act as a 'retain 1'
+      case 'keepkeep':
+      case 'removekeep':
+      case 'applykeep':
+      case 'keepapply':
+      case 'removeapply':
+        // our op consumes some of their keep
+        // their apply may act as a 'keep 1'
         pushOp(result, ours.next(lengthMin))
         theirs.next(lengthMin)
         break
 
-      case 'deletedelete':
-      case 'applydelete':
-      case 'retaindelete':
-        // their delete made some (or all) of our op unnecessary
+      case 'removeremove':
+      case 'applyremove':
+      case 'keepremove':
+        // their remove made some (or all) of our op unnecessary
         ours.next(lengthMin)
         theirs.next(lengthMin)
         break
 
-      case 'retaininsert':
+      case 'keepinsert':
       case 'applyinsert':
-      case 'deleteinsert':
+      case 'removeinsert':
         // shift for their insert
-        pushOp(result, ['retain', lengthTheirs])
+        pushOp(result, ['keep', lengthTheirs])
         theirs.next(lengthTheirs)
         break
 
-      case 'insertretain':
+      case 'insertkeep':
       case 'insertapply':
-      case 'insertdelete':
+      case 'insertremove':
         // our insert happens before their op
         pushOp(result, ours.next(lengthMin))
         break
@@ -185,7 +220,7 @@ export function transform(ourOps, theirOps, side) {
         if (side == 'left') {
           pushOp(result, ours.next(lengthOurs))
         } else {
-          pushOp(result, ['retain', lengthTheirs])
+          pushOp(result, ['keep', lengthTheirs])
           pushOp(result, ours.next(lengthOurs))
           theirs.next(lengthTheirs)
         }
@@ -193,12 +228,12 @@ export function transform(ourOps, theirOps, side) {
 
       case 'applyapply':
         // recurse to call the transform function if the subtypes match
-        let [, ourSubtype, ourArg] = ours.next()
-        let [, theirSubtype, theirArg] = theirs.next()
+        const [, ourSubtype, ourArg] = ours.next()
+        const [, theirSubtype, theirArg] = theirs.next()
         if (ourSubtype !== theirSubtype) {
           throw new Error(`cannot transform apply ops with different subtypes: ${ourSubtype}, ${theirSubtype}`)
         }
-        let transformed = getSubtype(ourSubtype).transform(ourArg, theirArg, side)
+        const transformed = getSubtype(ourSubtype).transform(ourArg, theirArg, side)
         pushOp(result, ['apply', ourSubtype, transformed])
         break
 
@@ -211,39 +246,33 @@ export function transform(ourOps, theirOps, side) {
 }
 
 function pushOp(delta, op) {
-  if ((op[0] == 'retain' || op[0] == 'delete') && op[1] <= 0) {
-    // retain or delete < is a no-op
-    return delta
-  }
-  if (op[0] == 'insert' && op.length < 2) {
-    // insert with no args is a no-op
-    return delta
-  }
+  const [type] = op
   if (delta.length == 0) {
-    // if delta is empty, shortcut
     delta.push(op)
     return
   }
-  let last = delta[delta.length - 1]
-  switch (last[0] + op[0]) {
-    case 'retainretain':
-    case 'deletedelete':
-      // merge consecutive retains/deletes
-      last[1] += op[1]
+  const lastOp = delta[delta.length - 1]
+  const lastType = lastOp[0]
+  switch (lastType + type) {
+    case 'keepkeep':
+    case 'removeremove':
+      // merge consecutive keeps/removes
+      lastOp[1] += op[1]
       break
-    case 'insertinsert':
-      // merge consecutive inserts
-      last.splice(last.length, 0, ...op.slice(1))
-      break
-    case 'insertdelete':
-      // ensure delete comes before insert
-      // if 2nd to last is a delete, make sure to merge it as above
-      var nextToLast = (delta.length > 1) && delta[delta.length - 2]
-      if (nextToLast && nextToLast[0] == 'delete') {
-        nextToLast[1] += op[1]
+    case 'insertremove':
+      // ensure remove comes before insert
+      // if 2nd to last is a remove, make sure to merge it as above
+      const nextToLastOp = (delta.length > 1) && delta[delta.length - 2]
+      if (nextToLastOp && nextToLastOp[0] == 'remove') {
+        nextToLastOp[1] += op[1]
       } else {
         delta.splice(delta.length - 1, 0, op)
       }
+      break
+    case 'cutpaste':
+      // consecutive cut and paste of same key is a no-op
+      if (lastOp[1] === op[1]) pushOp(delta, ['keep', 1])
+      else delta.push(op)
       break
     default:
       // otherwise push onto the end
@@ -252,47 +281,48 @@ function pushOp(delta, op) {
 }
 
 function chop(delta) {
-  if (delta.length > 0 && delta[delta.length - 1][0] == 'retain') {
+  if (delta.length > 0 && delta[delta.length - 1][0] == 'keep') {
     delta.pop()
   }
   return delta
 }
 
 function opLength(op) {
-  let type = op[0]
+  const type = op[0]
   switch (type) {
-    case 'retain':
-    case 'delete':
+    case 'keep':
+    case 'remove':
       return op[1]
     case 'insert':
-      return op.length - 1
     case 'apply':
+    case 'cut':
+    case 'paste':
       return 1
   }
 }
 
 function opSlice(op, offset, length) {
   switch (op[0]) {
-    case 'retain':
-    case 'delete':
+    case 'keep':
+    case 'remove':
       return [op[0], Math.min(length, op[1] - offset)]
     case 'insert':
-      return ['insert', ...op.slice(1).slice(offset, offset + length)]
     case 'apply':
-      // apply is indivisible
+    case 'cut':
+    case 'paste':
       return op
   }
 }
 
 function deltaIterator(delta) {
-  var index = 0
-  var offset = 0
+  let index = 0
+  let offset = 0
   return {
     peekType() {
       if (index < delta.length) {
         return delta[index][0]
       } else {
-        return 'retain'
+        return 'keep'
       }
     },
     peekLength() {
@@ -305,14 +335,11 @@ function deltaIterator(delta) {
     hasNext() {
       return index < delta.length
     },
-    next(count) {
-      if (count == null) {
-        count = Infinity
-      }
+    next(count = Infinity) {
       if (index >= delta.length) {
-        return ['retain', count]
+        return ['keep', count]
       }
-      let slice = opSlice(delta[index], offset, count)
+      const slice = opSlice(delta[index], offset, count)
       if (offset + count < opLength(delta[index])) {
         offset += count
       } else {
