@@ -104,7 +104,9 @@ export function compose(a, b) {
       case 'removeinsert':
       case 'removeremove':
       case 'removeapply':
-        // A's remove happens first, don't consume anything from B
+      case 'removecut':
+      case 'removepaste':
+        // A overrides B
         pushOp(result, iterA.next(lengthA))
         break
 
